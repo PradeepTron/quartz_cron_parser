@@ -37,14 +37,14 @@ from dateutil import rrule
 __all__ = ["Schedule", "InvalidExpression"]
 
 
-# * * * * * *
-# | | | | | |
-# | | | | | .. year (yyyy or * for any)
-# | | | | ...... day of week (1 - 7) (1 to 7 are Monday to Sunday)
-# | | | ........... month (1 - 12)
-# | | ................ day of month (1 - 31)
-# | ..................... hour (0 - 23)
-# .......................... min (0 - 59)
+# * * * * * * *
+# | | | | | | | . year (yyyy or * for any)
+# | | | | | | .. day of week (1 - 7) (1 to 7 are Monday to Sunday)
+# | | | | | ...... month (1 - 12)
+# | | | | ........... day of month (1 - 31)
+# | | | ................ hour (0 - 23)
+# | | ..................... min (0 - 59)
+# | .......................... sec (0 - 59)
 
 
 class InvalidExpression(Exception):
@@ -208,6 +208,11 @@ class Parser(object):
         groups = [cls._parse_item(item) for item in expression.split(',')]
         return sorted(list(set(itertools.chain(*groups))))
 
+class SecondParser(Parser):
+    """Custom parser for minutes"""
+    MIN_VALUE = 0
+    MAX_VALUE = 59
+
 
 class MinuteParser(Parser):
     """Custom parser for minutes"""
@@ -265,12 +270,18 @@ class WeekDayParser(Parser):
 def parse_cron(expression):
     """parses a cron expression into a dict"""
     try:
-        minute, hour, monthday, month, weekday, _ = expression.split(' ')
+        items = expression.split(' ')
+        if len(items) == 7:
+            second, minute, hour, monthday, month, weekday, year = expression.split(' ')
+        else:
+            second, minute, hour, monthday, month, weekday = expression.split(' ')
     except ValueError:
         raise InvalidExpression("Invalid number of items in expression: {}"
                                 .format(expression))
     result = dict()
     result["bysecond"] = [0]
+    if second != "*":
+        result["bysecond"] = SecondParser.parse(second)
     if minute != "*":
         result["byminute"] = MinuteParser.parse(minute)
     if hour != "*":
@@ -279,7 +290,7 @@ def parse_cron(expression):
         result["bymonthday"] = MonthDayParser.parse(monthday)
     if month != "*":
         result["bymonth"] = MonthParser.parse(month)
-    if weekday != "*":
+    if weekday not in ("*", "?"):
         # rrule uses 0 to 6 for monday to sunday
         result["byweekday"] = [d - 1 for d in WeekDayParser.parse(weekday)]
 
@@ -336,5 +347,3 @@ def get_year_filter(year):
                 return True
 
     return year_filter
-
-
